@@ -451,7 +451,25 @@ function buildDoc(filename, xmlStr, theme){
   }).filter(function(a){return a.text;});
 
     // ── Multi-page layout ────────────────────────────────────────────────────
-  var totalPages = 1 + (notes.length ? 1 : 0) + (decs.length || acts.length ? 1 : 0);
+  // Estimate how many A4 pages the notes section needs
+  var NOTE_PAGE_H  = 780;  // approx usable body px per page
+  var NOTE_SEC_H   = 42;   // "Notities" section header height
+  var NOTE_TOPIC_H = 40;   // per-topic heading + padding
+  var NOTE_BULLET_H= 24;   // per bullet line
+  function calcNotePages(ns){
+    if(!ns.length) return 0;
+    var pages=0, h=NOTE_SEC_H, hasContent=false;
+    ns.forEach(function(n){
+      var nh=NOTE_TOPIC_H+Math.max(1,n.bullets.length)*NOTE_BULLET_H;
+      if(hasContent && h+nh>NOTE_PAGE_H){ pages++; h=NOTE_SEC_H+nh; }
+      else{ h+=nh; }
+      hasContent=true;
+    });
+    if(hasContent) pages++;
+    return pages;
+  }
+  var notePageCount = calcNotePages(notes);
+  var totalPages = 1 + notePageCount + (decs.length || acts.length ? 1 : 0);
 
   function pgHeader(){
     var s='<div class="a4-header">';
@@ -506,16 +524,26 @@ function buildDoc(filename, xmlStr, theme){
   }
   h+=wrapPage(p1,ref,pg++,totalPages,subj,dtype,false,filename);
 
-  // PAGE 2 — Notities
+  // PAGE 2+ — Notities (paginated)
   if(notes.length){
-    var p2='<div class="a4-sec"><div class="a4-sec-title">Notities</div>';
+    var noteH=NOTE_SEC_H, noteIsFirst=true;
+    var notePageBody='<div class="a4-sec"><div class="a4-sec-title">Notities</div>';
     notes.forEach(function(n){
-      p2+='<div class="a4-topic"><div class="a4-topic-h">'+esc(n.subj)+'</div><ul class="a4-blist">';
-      n.bullets.forEach(function(b){p2+='<li>'+esc(b)+'</li>';});
-      p2+='</ul></div>';
+      var nh=NOTE_TOPIC_H+Math.max(1,n.bullets.length)*NOTE_BULLET_H;
+      if(!noteIsFirst && noteH+nh>NOTE_PAGE_H){
+        notePageBody+='</div>';
+        h+=wrapPage(notePageBody,ref,pg++,totalPages,subj,dtype,true,filename);
+        notePageBody='<div class="a4-sec">';
+        noteH=NOTE_SEC_H;
+      }
+      notePageBody+='<div class="a4-topic"><div class="a4-topic-h">'+esc(n.subj)+'</div><ul class="a4-blist">';
+      n.bullets.forEach(function(b){notePageBody+='<li>'+esc(b)+'</li>';});
+      notePageBody+='</ul></div>';
+      noteH+=nh;
+      noteIsFirst=false;
     });
-    p2+='</div>';
-    h+=wrapPage(p2,ref,pg++,totalPages,subj,dtype,true,filename);
+    notePageBody+='</div>';
+    h+=wrapPage(notePageBody,ref,pg++,totalPages,subj,dtype,true,filename);
   }
 
   // PAGE 3 — Beslissingen + Actiepunten
